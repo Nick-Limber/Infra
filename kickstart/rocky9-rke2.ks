@@ -2,7 +2,7 @@
 # Rocky Linux 9 kickstart - RKE2 node base install (control plane or worker)
 #
 # Produces a minimal, Ansible-ready host:
-#   - "ansible" user, SSH key only, passwordless sudo
+#   - "automation" user, SSH key only, passwordless sudo
 #   - root locked, SSH password logins disabled
 #   - no swap, SELinux enforcing, firewalld disabled, chrony time sync
 #   - dedicated LV for /var/lib/rancher (images + containerd + etcd)
@@ -44,8 +44,8 @@ selinux --enforcing
 firewall --disabled                        # RKE2 recommends firewalld off
 rootpw --lock
 
-user --name=ansible --groups=wheel --gecos="Ansible automation" --lock
-sshkey --username=ansible "ssh-ed25519 AAAA...CHANGEME... you@workstation"
+user --name=automation --groups=wheel --gecos="Automation user" --lock
+sshkey --username=automation "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL/BL4+a76FSRkR/IESianftmxrHM7V+bqelhyMnRswF limbern@proton.me"
 
 services --enabled=sshd,chronyd,NetworkManager --disabled=kdump
 
@@ -131,11 +131,11 @@ echo "hostname=${KS_HOSTNAME} ip=${KS_IP:-dhcp} disk=${KS_DISK}"
 set -x
 
 # Passwordless sudo for the automation user (Ansible `become`)
-cat > /etc/sudoers.d/ansible <<'EOF'
-ansible ALL=(ALL) NOPASSWD: ALL
+cat > /etc/sudoers.d/automation <<'EOF'
+automation ALL=(ALL) NOPASSWD: ALL
 EOF
-chmod 0440 /etc/sudoers.d/ansible
-visudo -cf /etc/sudoers.d/ansible
+chmod 0440 /etc/sudoers.d/automation
+visudo -cf /etc/sudoers.d/automation
 
 # SSH: keys only, no root login
 cat > /etc/ssh/sshd_config.d/10-hardening.conf <<'EOF'
