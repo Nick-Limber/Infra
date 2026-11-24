@@ -1,0 +1,59 @@
+---
+- name: Verify the control plane is reachable before joining
+  ansible.builtin.wait_for:
+    host: "{{ rke2_api_endpoint }}"
+    port: 9345
+    timeout: 60
+
+- name: Prepare host and install RKE2 agent
+  ansible.builtin.include_role:
+    name: rke2_common
+  vars:
+    rke2_type: agent
+
+- name: Resolve join token
+  ansible.builtin.include_role:
+    name: rke2_common
+    tasks_from: get_token
+
+- name: Write /etc/rancher/rke2/config.yaml
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    mode: "0600"
+  register: rke2_config
+
+- name: Enable and (re)start rke2-agent
+  ansible.builtin.systemd_service:
+    name: rke2-agent
+    enabled: true
+    daemon_reload: true
+    state: "{{ 'restarted' if (rke2_config is changed or rke2_install is changed) else 'started' }}"
+
+- name: Wait for the worker to register and become Ready
+  ansible.builtin.command: >-
+    /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+    get node {{ rke2_node_name }}
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  delegate_to: "{{ groups['rke2_servers'][0] }}"
+  register: node_ready
+  until: node_ready.stdout == "True"
+  retries: 60
+  delay: 10
+  changed_when: false
+  failed_when: false
+
+- name: Apply worker role label
+  ansible.builtin.command: >-
+    /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+    label node {{ rke2_node_name }} node-role.kubernetes.io/worker=true --overwrite
+  delegate_to: "{{ groups['rke2_servers'][0] }}"
+  when: rke2_label_worker_role and node_ready.stdout == "True"
+  register: label_result
+  changed_when: "'labeled' in label_result.stdout and 'not labeled' not in label_result.stdout"
+
+- name: Report worker status
+  ansible.builtin.debug:
+    msg: >-
+      {{ rke2_node_name }} is
+      {{ 'Ready' if node_ready.stdout == 'True' else 'NOT Ready yet - check: journalctl -u rke2-agent -f' }}

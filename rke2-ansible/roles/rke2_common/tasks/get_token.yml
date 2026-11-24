@@ -1,0 +1,16 @@
+---
+# Resolves the cluster join token into `rke2_join_token`.
+# Uses rke2_token if set, otherwise reads it from the first control plane node.
+
+- name: Read join token from the bootstrap control plane node
+  ansible.builtin.slurp:
+    src: /var/lib/rancher/rke2/server/node-token
+  delegate_to: "{{ groups['rke2_servers'][0] }}"
+  run_once: true
+  register: rke2_node_token
+  when: not rke2_token
+
+- name: Set join token fact
+  ansible.builtin.set_fact:
+    rke2_join_token: "{{ rke2_token if rke2_token else (rke2_node_token.content | b64decode | trim) }}"
+  no_log: true

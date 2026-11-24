@@ -1,0 +1,86 @@
+---
+- name: Prepare host and install RKE2 server
+  ansible.builtin.include_role:
+    name: rke2_common
+  vars:
+    rke2_type: server
+
+- name: Determine if this is the bootstrap node
+  ansible.builtin.set_fact:
+    rke2_is_bootstrap: "{{ inventory_hostname == groups['rke2_servers'][0] }}"
+
+# Additional control plane nodes need the token from the bootstrap node.
+- name: Resolve join token
+  ansible.builtin.include_role:
+    name: rke2_common
+    tasks_from: get_token
+  when: not rke2_is_bootstrap
+
+- name: Write /etc/rancher/rke2/config.yaml
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/rke2/config.yaml
+    mode: "0600"
+  register: rke2_config
+
+- name: Enable and (re)start rke2-server
+  ansible.builtin.systemd_service:
+    name: rke2-server
+    enabled: true
+    daemon_reload: true
+    state: "{{ 'restarted' if (rke2_config is changed or rke2_install is changed) else 'started' }}"
+
+- name: Wait for the supervisor port
+  ansible.builtin.wait_for:
+    port: 9345
+    timeout: 600
+
+- name: Wait for the node token file
+  ansible.builtin.wait_for:
+    path: /var/lib/rancher/rke2/server/node-token
+    timeout: 300
+
+- name: Symlink kubectl / crictl into PATH
+  ansible.builtin.file:
+    src: "/var/lib/rancher/rke2/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - kubectl
+    - crictl
+
+- name: Wait for this node to be Ready
+  ansible.builtin.command: >-
+    /var/lib/rancher/rke2/bin/kubectl --kubeconfig /etc/rancher/rke2/rke2.yaml
+    get node {{ rke2_node_name }}
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  register: node_ready
+  until: node_ready.stdout == "True"
+  retries: 60
+  delay: 10
+  changed_when: false
+
+- name: Fetch kubeconfig to the Ansible controller
+  when: rke2_fetch_kubeconfig and rke2_is_bootstrap
+  block:
+    - name: Read kubeconfig
+      ansible.builtin.slurp:
+        src: /etc/rancher/rke2/rke2.yaml
+      register: rke2_kubeconfig
+
+    - name: Ensure local kubeconfig directory exists
+      ansible.builtin.file:
+        path: "{{ rke2_local_kubeconfig | dirname }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Write kubeconfig locally (server address rewritten)
+      ansible.builtin.copy:
+        content: "{{ rke2_kubeconfig.content | b64decode | replace('https://127.0.0.1:6443', 'https://' ~ rke2_api_endpoint ~ ':6443') }}"
+        dest: "{{ rke2_local_kubeconfig }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false

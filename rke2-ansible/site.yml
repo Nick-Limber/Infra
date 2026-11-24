@@ -1,0 +1,7 @@
+---
+# Full cluster build: control plane first, then workers.
+- name: Control plane
+  ansible.builtin.import_playbook: control-plane.yml
+
+- name: Workers
+  ansible.builtin.import_playbook: workers.yml

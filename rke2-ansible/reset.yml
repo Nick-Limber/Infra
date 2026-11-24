@@ -1,0 +1,21 @@
+---
+# DESTRUCTIVE: completely removes RKE2 and all cluster data from the targets.
+#   ansible-playbook reset.yml                  # whole cluster
+#   ansible-playbook reset.yml --limit worker2  # a single node
+
+- name: Uninstall RKE2
+  hosts: rke2_cluster
+  become: true
+  tasks:
+    - name: Find uninstall script
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/local/bin/rke2-uninstall.sh
+        - /usr/bin/rke2-uninstall.sh
+      register: uninstall_script
+
+    - name: Run rke2-uninstall.sh
+      ansible.builtin.command: "{{ (uninstall_script.results | selectattr('stat.exists') | first).item }}"
+      when: uninstall_script.results | selectattr('stat.exists') | list
+      changed_when: true

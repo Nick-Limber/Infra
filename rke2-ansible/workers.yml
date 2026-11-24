@@ -1,0 +1,11 @@
+---
+# Installs RKE2 agent on worker nodes and joins them to the cluster.
+# Run control-plane.yml first. Safe to re-run when you add new workers:
+#   ansible-playbook workers.yml
+#   ansible-playbook workers.yml --limit worker3     # just the new node
+
+- name: Bootstrap RKE2 worker nodes
+  hosts: rke2_agents
+  become: true
+  roles:
+    - rke2_agent

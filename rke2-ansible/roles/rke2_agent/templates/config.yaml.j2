@@ -1,0 +1,11 @@
+{%- set cfg = {
+  'server': 'https://' ~ rke2_api_endpoint ~ ':9345',
+  'token': rke2_join_token,
+  'node-name': rke2_node_name,
+} -%}
+{%- if rke2_agent_node_labels -%}
+{%-   set _ = cfg.update({'node-label': rke2_agent_node_labels}) -%}
+{%- endif -%}
+{%- set _ = cfg.update(rke2_agent_extra_config) -%}
+# Managed by Ansible - changes will be overwritten
+{{ cfg | to_nice_yaml(indent=2) }}

@@ -1,0 +1,52 @@
+---
+# ---- Version ----------------------------------------------------------------
+# Pin an exact release (e.g. "v1.33.5+rke2r1") for reproducible installs.
+# Leave empty to install the latest release from rke2_channel.
+rke2_version: ""
+rke2_channel: stable            # stable | latest | v1.33 | v1.32 ...
+
+# ---- Cluster join -----------------------------------------------------------
+# Shared secret. Strongly recommended: set this yourself (ideally via
+# ansible-vault). If left empty, RKE2 generates one on the first control plane
+# node and the playbooks read it from /var/lib/rancher/rke2/server/node-token.
+rke2_token: ""
+
+# Address workers / extra control planes use to reach the supervisor (9345).
+# Point this at a load balancer / VIP if you run an HA control plane.
+rke2_api_endpoint: "{{ hostvars[groups['rke2_servers'][0]]['ansible_host'] | default(groups['rke2_servers'][0]) }}"
+
+# Extra names/IPs to put in the API server certificate (LB DNS, VIP, etc.)
+rke2_tls_san: []
+
+# ---- Networking -------------------------------------------------------------
+rke2_cni: canal                 # canal | calico | cilium | flannel
+rke2_cluster_cidr: 10.42.0.0/16
+rke2_service_cidr: 10.43.0.0/16
+
+# ---- Control plane behaviour ------------------------------------------------
+# Taint control plane nodes so regular workloads only land on workers.
+rke2_control_plane_taint: true
+
+# Copy an admin kubeconfig back to the machine running Ansible.
+rke2_fetch_kubeconfig: true
+rke2_local_kubeconfig: "{{ playbook_dir }}/kubeconfig/rke2.yaml"
+
+# ---- Node labels ------------------------------------------------------------
+rke2_server_node_labels: []
+# Applied by the kubelet at registration. Note: kubelet cannot self-apply
+# node-role.kubernetes.io/* labels - use rke2_label_worker_role for that.
+rke2_agent_node_labels: []
+# Apply node-role.kubernetes.io/worker via kubectl after the node joins
+rke2_label_worker_role: true
+
+# ---- Host prep --------------------------------------------------------------
+rke2_disable_swap: true
+rke2_disable_firewalld: true    # RKE2 docs recommend disabling firewalld
+rke2_disable_ufw: false
+
+# Any extra raw keys to drop into /etc/rancher/rke2/config.yaml
+rke2_server_extra_config: {}
+rke2_agent_extra_config: {}
+
+# Force re-running the installer (e.g. to upgrade after changing rke2_version)
+rke2_force_install: false

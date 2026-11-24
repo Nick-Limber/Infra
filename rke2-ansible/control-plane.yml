@@ -1,0 +1,16 @@
+---
+# Installs RKE2 server on the control plane node(s).
+#   ansible-playbook control-plane.yml
+
+- name: Bootstrap the first RKE2 control plane node
+  hosts: rke2_servers[0]
+  become: true
+  roles:
+    - rke2_server
+
+- name: Join additional control plane nodes (one at a time)
+  hosts: rke2_servers[1:]
+  become: true
+  serial: 1
+  roles:
+    - rke2_server
